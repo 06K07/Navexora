@@ -198,7 +198,8 @@ const ALL_FIELDS = Object.values(FIELD_CATALOGUE).flat();
 
 // ---------- Backend call: real AI roadmap generation ----------
 // Backend URL — change if you deploy the backend somewhere else.
-const API_BASE = "https://navexora.onrender.com";
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://navexora.onrender.com";
 
 async function fetchAIRoadmap({ fieldName, level, hours }) {
   const res = await fetch(`${API_BASE}/api/roadmap`, {
