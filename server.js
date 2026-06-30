@@ -6,17 +6,22 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5050;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-if (!ANTHROPIC_API_KEY) {
+const ai = new GoogleGenAI({
+  apiKey: GEMINI_API_KEY,
+});
+
+if (!GEMINI_API_KEY) {
   console.warn(
-    "WARNING: ANTHROPIC_API_KEY is not set. Add it to a .env file before calling /api/roadmap."
+    "WARNING: GEMINI_API_KEY is not set. Add it to a .env file before calling /api/roadmap."
   );
 }
 
@@ -54,34 +59,13 @@ Requirements:
 }
 
 // Shared helper to call the Anthropic API and return cleaned text.
-async function callClaude(prompt, maxTokens = 2000) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }],
-    }),
+async function callGemini(prompt) {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error("Anthropic API error:", errText);
-    throw new Error("Upstream AI request failed.");
-  }
-
-  const data = await response.json();
-  const rawText = data.content
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .join("\n")
-    .trim();
-
-  return rawText.replace(/^```json\s*|```$/g, "").trim();
+  return response.text.replace(/^```json\s*|```$/g, "").trim();
 }
 
 app.post("/api/roadmap", async (req, res) => {
@@ -128,8 +112,8 @@ app.post("/api/questions", async (req, res) => {
     if (!fieldName || !phaseTitle) {
       return res.status(400).json({ error: "fieldName and phaseTitle are required." });
     }
-    if (!ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY." });
+    if (!GEMINI_API_KEY) {
+  return res.status(500).json({ error: "Server is missing GEMINI_API_KEY." });
     }
 
     const prompt = `Generate 3 fresh, realistic interview or assessment questions for the
@@ -141,7 +125,7 @@ and style (some conceptual, some scenario-based).
 Return ONLY valid JSON, no markdown fences, no commentary, matching exactly:
 { "questions": ["question 1", "question 2", "question 3"] }`;
 
-    const cleaned = await callClaude(prompt, 500);
+    const cleaned = await callGemini(prompt);
 
     let parsed;
     try {
