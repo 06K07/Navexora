@@ -3,10 +3,12 @@
 // learning roadmap for any field. Keeps the API key safe on the server
 // side (never expose it in frontend code).
 
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
-const { GoogleGenAI } = require("@google/genai");
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
