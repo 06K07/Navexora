@@ -602,3 +602,43 @@
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* ---------- Resource links & question refresh ---------- */
+
+.pf-resource-link {
+  color: #5eead4;
+  text-decoration: none;
+}
+.pf-resource-link:hover {
+  text-decoration: underline;
+  color: #99f6e4;
+}
+
+.pf-questions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pf-refresh-questions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #5eead4;
+  background: none;
+  border: 1px solid #134e4a;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.pf-refresh-questions:hover:not(:disabled) {
+  border-color: #2dd4bf;
+}
+.pf-refresh-questions:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

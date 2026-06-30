@@ -214,6 +214,32 @@ async function fetchAIRoadmap({ fieldName, level, hours }) {
   return data.phases;
 }
 
+// Calls the backend to get a fresh, differently-worded batch of
+// interview questions for a given phase — used by the "New questions" button.
+async function fetchFreshQuestions({ fieldName, phaseTitle }) {
+  const res = await fetch(`${API_BASE}/api/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fieldName, phaseTitle }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to generate questions.");
+  }
+  const data = await res.json();
+  return data.questions;
+}
+
+// Builds a direct, clickable link for a book or playlist title.
+// Books -> Google Books search. Playlists -> YouTube search.
+// This always works even without a real curated URL on file.
+function bookLink(title) {
+  return `https://www.google.com/search?tbm=bks&q=${encodeURIComponent(title)}`;
+}
+function playlistLink(title) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(title)}`;
+}
+
 // ---------- Helpers ----------
 
 const LEVELS = ["Just starting", "Some basics", "Comfortable, want depth"];
@@ -242,6 +268,8 @@ export default function Navexora() {
   const [aiPhases, setAiPhases] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError] = useState(null);
+  const [customQuestions, setCustomQuestions] = useState({}); // { [phaseIndex]: [questions] }
+  const [questionLoading, setQuestionLoading] = useState({}); // { [phaseIndex]: boolean }
 
   const curated = pathKey ? PATHS[pathKey] : null;
   const label = curated ? curated.label : fieldName;
@@ -301,6 +329,20 @@ export default function Navexora() {
     setDone((d) => ({ ...d, [key]: !d[key] }));
   };
 
+  // Asks the AI for a fresh batch of differently-worded interview
+  // questions for one phase, replacing what's shown for that phase only.
+  const regenerateQuestions = async (pi, phaseTitle) => {
+    setQuestionLoading((q) => ({ ...q, [pi]: true }));
+    try {
+      const questions = await fetchFreshQuestions({ fieldName: label, phaseTitle });
+      setCustomQuestions((c) => ({ ...c, [pi]: questions }));
+    } catch (err) {
+      setGenError(err.message || "Couldn't generate new questions.");
+    } finally {
+      setQuestionLoading((q) => ({ ...q, [pi]: false }));
+    }
+  };
+
   const reset = () => {
     setStep("select");
     setPathKey(null);
@@ -312,6 +354,8 @@ export default function Navexora() {
     setOpenPhase(0);
     setAiPhases(null);
     setGenError(null);
+    setCustomQuestions({});
+    setQuestionLoading({});
   };
 
   // ---------- Screen 1: Select a field ----------
@@ -574,7 +618,11 @@ export default function Navexora() {
                         </p>
                         <ul className="pf-resource-list">
                           {phase.books.map((b, i) => (
-                            <li key={i}>{b}</li>
+                            <li key={i}>
+                              <a href={bookLink(b)} target="_blank" rel="noopener noreferrer" className="pf-resource-link">
+                                {b}
+                              </a>
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -584,16 +632,31 @@ export default function Navexora() {
                         </p>
                         <ul className="pf-resource-list">
                           {phase.playlists.map((b, i) => (
-                            <li key={i}>{b}</li>
+                            <li key={i}>
+                              <a href={playlistLink(b)} target="_blank" rel="noopener noreferrer" className="pf-resource-link">
+                                {b}
+                              </a>
+                            </li>
                           ))}
                         </ul>
                       </div>
                       <div>
-                        <p className="pf-resource-col-label">
-                          <MessageSquareText size={13} /> Interview Qs
-                        </p>
+                        <div className="pf-questions-header">
+                          <p className="pf-resource-col-label" style={{ marginBottom: 0 }}>
+                            <MessageSquareText size={13} /> Interview Qs
+                          </p>
+                          <button
+                            className="pf-refresh-questions"
+                            disabled={!!questionLoading[pi]}
+                            onClick={() => regenerateQuestions(pi, phase.title)}
+                            title="Generate different questions with AI"
+                          >
+                            <RotateCcw size={12} />
+                            {questionLoading[pi] ? "..." : "New"}
+                          </button>
+                        </div>
                         <ul className="pf-resource-list">
-                          {phase.interview.map((b, i) => (
+                          {(customQuestions[pi] || phase.interview).map((b, i) => (
                             <li key={i}>{b}</li>
                           ))}
                         </ul>

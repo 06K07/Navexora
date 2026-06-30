@@ -53,6 +53,37 @@ Requirements:
 - Output must be valid JSON only.`;
 }
 
+// Shared helper to call the Anthropic API and return cleaned text.
+async function callClaude(prompt, maxTokens = 2000) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error("Anthropic API error:", errText);
+    throw new Error("Upstream AI request failed.");
+  }
+
+  const data = await response.json();
+  const rawText = data.content
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .join("\n")
+    .trim();
+
+  return rawText.replace(/^```json\s*|```$/g, "").trim();
+}
+
 app.post("/api/roadmap", async (req, res) => {
   try {
     const { fieldName, level, hours } = req.body;
@@ -66,35 +97,7 @@ app.post("/api/roadmap", async (req, res) => {
     }
 
     const prompt = buildPrompt({ fieldName, level, hours });
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Anthropic API error:", errText);
-      return res.status(502).json({ error: "Upstream AI request failed." });
-    }
-
-    const data = await response.json();
-    const rawText = data.content
-      .map((block) => (block.type === "text" ? block.text : ""))
-      .join("\n")
-      .trim();
-
-    // Strip accidental markdown code fences just in case.
-    const cleaned = rawText.replace(/^```json\s*|```$/g, "").trim();
+    const cleaned = await callClaude(prompt, 2200);
 
     let parsed;
     try {
@@ -106,6 +109,50 @@ app.post("/api/roadmap", async (req, res) => {
 
     if (!parsed.phases || !Array.isArray(parsed.phases)) {
       return res.status(502).json({ error: "AI response missing 'phases' array." });
+    }
+
+    return res.json(parsed);
+  } catch (err) {
+    console.error("Server error:", err);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Generates a fresh, different batch of interview questions on demand —
+// used by the "New questions" button so users get variety instead of
+// seeing the same fixed list every time.
+app.post("/api/questions", async (req, res) => {
+  try {
+    const { fieldName, phaseTitle } = req.body;
+
+    if (!fieldName || !phaseTitle) {
+      return res.status(400).json({ error: "fieldName and phaseTitle are required." });
+    }
+    if (!ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY." });
+    }
+
+    const prompt = `Generate 3 fresh, realistic interview or assessment questions for the
+"${phaseTitle}" stage of becoming a "${fieldName}".
+
+Make them different in wording and angle from typical generic questions — vary difficulty
+and style (some conceptual, some scenario-based).
+
+Return ONLY valid JSON, no markdown fences, no commentary, matching exactly:
+{ "questions": ["question 1", "question 2", "question 3"] }`;
+
+    const cleaned = await callClaude(prompt, 500);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.error("Failed to parse questions JSON:", cleaned);
+      return res.status(502).json({ error: "AI returned malformed data. Try again." });
+    }
+
+    if (!parsed.questions || !Array.isArray(parsed.questions)) {
+      return res.status(502).json({ error: "AI response missing 'questions' array." });
     }
 
     return res.json(parsed);
