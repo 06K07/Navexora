@@ -333,10 +333,13 @@ export default function Navexora() {
   // questions for one phase, replacing what's shown for that phase only.
   const regenerateQuestions = async (pi, phaseTitle) => {
     setQuestionLoading((q) => ({ ...q, [pi]: true }));
+    setGenError(null);
     try {
       const questions = await fetchFreshQuestions({ fieldName: label, phaseTitle });
+      console.log(`New questions for phase ${pi} (${phaseTitle}):`, questions);
       setCustomQuestions((c) => ({ ...c, [pi]: questions }));
     } catch (err) {
+      console.error("regenerateQuestions failed:", err);
       setGenError(err.message || "Couldn't generate new questions.");
     } finally {
       setQuestionLoading((q) => ({ ...q, [pi]: false }));
@@ -536,6 +539,14 @@ export default function Navexora() {
             <RotateCcw size={14} /> Start over
           </button>
         </div>
+
+        {genError && (
+          <div className="pf-progress-card" style={{ borderColor: "#7f1d1d" }}>
+            <p className="pf-progress-hint" style={{ margin: 0 }}>
+              {genError} — make sure the backend server is running on localhost:5050.
+            </p>
+          </div>
+        )}
 
         <div className="pf-progress-card">
           <div className="pf-progress-row">
